@@ -1,14 +1,19 @@
+# 执行钩子模块
+# 在Oxidized事件发生时执行外部命令，支持同步和异步执行
 class Exec < Oxidized::Hook
   include Process
 
+  # 初始化执行钩子
   def initialize
     super
     @timeout = 60
     @async = false
   end
 
+  # 验证配置参数
+  # 检查超时、异步和命令配置的有效性
   def validate_cfg!
-    # Syntax check
+    # 语法检查
     if cfg.has_key? "timeout"
       @timeout = cfg.timeout
       raise "invalid timeout value" unless @timeout.is_a?(Integer) &&
@@ -26,6 +31,9 @@ class Exec < Oxidized::Hook
           "#{self.class.name}: configuration invalid: #{e.message}"
   end
 
+  # 运行钩子
+  # 执行配置的外部命令
+  # @param ctx [Object] 钩子上下文，包含事件和节点信息
   def run_hook(ctx)
     env = make_env ctx
     logger.debug "Execute: #{@cmd.inspect}"
@@ -37,6 +45,8 @@ class Exec < Oxidized::Hook
     th.join unless @async
   end
 
+  # 执行命令
+  # @param env [Hash] 环境变量哈希
   def run_cmd!(env)
     pid = nil
     status = nil
@@ -56,6 +66,10 @@ class Exec < Oxidized::Hook
     raise Timeout::Error, msg
   end
 
+  # 创建环境变量
+  # 将钩子上下文信息转换为环境变量
+  # @param ctx [Object] 钩子上下文
+  # @return [Hash] 环境变量哈希
   def make_env(ctx)
     env = {
       "OX_EVENT" => ctx.event.to_s

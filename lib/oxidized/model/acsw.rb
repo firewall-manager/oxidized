@@ -1,14 +1,20 @@
+# ACSW 设备模型
+# 支持 ACSW 设备的配置备份
 class ACSW < Oxidized::Model
   using Refinements
 
+  # 提示符正则表达式：匹配 ACSW 设备提示符
   prompt /([\w.@()\/\\-]+[#>]\s?)/
+  # 注释字符：ACSW 使用感叹号作为注释
   comment  '! '
 
+  # 处理所有命令的输出，移除无效输入错误信息
   cmd :all do |cfg|
     cfg.gsub! /^% Invalid input detected at '\^' marker\.$|^\s+\^$/, ''
     cfg.cut_both
   end
 
+  # 处理敏感信息，隐藏各种密码和密钥
   cmd :secret do |cfg|
     cfg.gsub! /^(snmp-server community).*/, '\\1 <configuration removed>'
     cfg.gsub! /^(username \S+ privilege \d+) (\S+).*/, '\\1 <secret hidden>'
@@ -26,14 +32,17 @@ class ACSW < Oxidized::Model
     cfg
   end
 
+  # 处理版本信息
   cmd 'show version' do |cfg|
     comment cfg
   end
 
+  # 处理库存信息
   cmd 'show inventory' do |cfg|
     comment cfg
   end
 
+  # 处理运行配置，清理时间戳和动态信息
   cmd 'show running-config' do |cfg|
     cfg = cfg.each_line.to_a[3..-1]
     cfg = cfg.reject { |line| line.match /^ntp clock-period / }.join
@@ -46,11 +55,13 @@ class ACSW < Oxidized::Model
     cfg
   end
 
+  # Telnet 连接配置
   cfg :telnet do
     username /.*login:/
     password /^Password:/
   end
 
+  # Telnet 和 SSH 连接配置
   cfg :telnet, :ssh do
     if vars :enable
       post_login do

@@ -1,8 +1,11 @@
+# Netgate TNSR 设备模型
+# 支持 Netgate TNSR 网络设备的配置备份
 class TNSR < Oxidized::Model
   using Refinements
 
   # Netgate TNSR #
 
+  # 提示符示例
   # prompt examples
   # https://docs.netgate.com/tnsr/en/latest/basics/working-cli.html#command-prompt
   #  "<hostname> tnsr<(mode)># " <-- with trailing whitespace
@@ -18,15 +21,19 @@ class TNSR < Oxidized::Model
   #    spec/model/data/tnsr#TNSR_24.10-3_short-config#simulation.yaml
   #    spec/model/data/tnsr#TNSR_25.02-2_long-config-and-pager-at-last-line#simulation.yaml
   #    spec/model/data/tnsr#TNSR_23.06-3_with-misplaced-pager#simulation.yaml
+  # 提示符正则表达式：匹配 TNSR 设备提示符，处理分页器孤儿字符
   prompt /^((\x08{8}\x20{8}\x08{8})?\r?[\w-]+\stnsr#\s?)$/
 
+  # 注释字符：TNSR 使用感叹号作为注释
   comment '! '
 
+  # 处理分页显示
   expect /^--More--|--More--$/ do |data, re|
     send ' '
     data.sub re, ''
   end
 
+  # 处理所有命令的输出，清理孤儿字符
   cmd :all do |cfg|
     # remove orphans \r
     cfg.gsub! /^\r+(.+)/, '\1'
@@ -35,22 +42,26 @@ class TNSR < Oxidized::Model
     cfg.cut_both
   end
 
+  # 处理敏感信息，隐藏密码和社区字符串
   cmd :secret do |cfg|
     cfg.gsub! /(password( \d+)?) (\S+).*/, '\\1 <secret hidden>'
     cfg.gsub! /^(snmp community community-name )\S+ (.*)?/, '\\1 <configuration removed> \\2'
     cfg
   end
 
+  # 处理版本信息，兼容旧版本
   cmd 'show version all' do |cfg|
     # for older tnsr versions
     cfg = cmd('show version') if cfg.to_s =~ /^CLI syntax error:.+Unknown command$/
     comment cfg
   end
 
+  # 处理运行配置
   cmd 'show configuration running cli' do |cfg|
     cfg
   end
 
+  # Telnet 和 SSH 连接配置
   cfg :telnet, :ssh do
     pre_logout 'exit'
   end

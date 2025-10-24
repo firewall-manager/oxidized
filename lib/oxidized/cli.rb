@@ -1,6 +1,8 @@
 require 'semantic_logger'
 
 module Oxidized
+  # 命令行接口类
+  # 处理Oxidized的命令行参数、进程管理和启动逻辑
   class CLI
     include SemanticLogger::Loggable
 
@@ -8,6 +10,8 @@ module Oxidized
     require 'oxidized'
     require 'English'
 
+    # 运行Oxidized主程序
+    # 检查PID文件、处理守护进程模式、写入PID文件并启动核心程序
     def run
       check_pid
       Process.daemon if @opts[:daemonize]
@@ -23,6 +27,8 @@ module Oxidized
 
     private
 
+    # 初始化命令行接口
+    # 解析命令行参数、加载配置、设置日志和PID文件路径
     def initialize
       _args, @opts = parse_opts
 
@@ -32,6 +38,9 @@ module Oxidized
       @pidfile = File.expand_path(Oxidized.config.pid)
     end
 
+    # 处理程序崩溃
+    # 将崩溃信息写入崩溃文件
+    # @param error [Exception] 异常对象
     def crash(error)
       logger.fatal "Oxidized crashed, crashfile written in #{Config::CRASH}"
       File.open Config::CRASH, 'w' do |file|
@@ -44,6 +53,8 @@ module Oxidized
       end
     end
 
+    # 解析命令行选项
+    # @return [Array] [参数数组, 选项对象]
     def parse_opts
       opts = Slop.parse do |opt|
         opt.on '-d', '--debug', 'turn on debugging'
@@ -67,12 +78,17 @@ module Oxidized
       [opts.arguments, opts]
     end
 
+    # PID文件路径
     attr_reader :pidfile
 
+    # 检查是否有PID文件
+    # @return [Boolean] 是否有PID文件
     def pidfile?
       !!pidfile
     end
 
+    # 写入PID文件
+    # 创建PID文件并注册退出时清理
     def write_pid
       return unless pidfile?
 
@@ -85,6 +101,8 @@ module Oxidized
       end
     end
 
+    # 检查PID文件状态
+    # 检查是否有其他实例在运行
     def check_pid
       return unless pidfile?
 
@@ -97,6 +115,9 @@ module Oxidized
       end
     end
 
+    # 检查PID文件状态
+    # @param pidfile [String] PID文件路径
+    # @return [Symbol] PID状态：:running, :dead, :not_owned, :exited
     def pid_status(pidfile)
       return :exited unless File.exist?(pidfile)
 

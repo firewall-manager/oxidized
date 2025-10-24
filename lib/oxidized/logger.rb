@@ -1,9 +1,13 @@
 require 'semantic_logger'
 
 module Oxidized
+  # 日志模块
+  # 负责设置和管理Oxidized的日志系统
   module Logger
     include SemanticLogger::Loggable
 
+    # 设置日志系统
+    # 配置日志级别、输出目标和处理器
     def self.setup
       config = Oxidized.config
       FileUtils.mkdir_p(Config::LOG) unless File.directory?(Config::LOG)
@@ -23,7 +27,7 @@ module Oxidized
         config.logger.appenders.each { |a| add_appender a } if config.logger.has_key?('appenders')
       end
 
-      # No appenders configured
+      # 没有配置输出器时使用stderr
       SemanticLogger.add_appender(io: $stderr) if SemanticLogger.appenders.empty?
 
       return if %i[trace debug].include?(SemanticLogger.default_level)
@@ -31,6 +35,8 @@ module Oxidized
       SemanticLogger.default_level = :debug if config.debug?
     end
 
+    # 添加日志输出器
+    # @param appender [Hash] 输出器配置
     def self.add_appender(appender)
       case appender['type']
       when 'file'

@@ -1,13 +1,19 @@
 module Oxidized
   module Output
+    # HTTP输出模块
+    # 将设备配置通过HTTP POST请求发送到远程服务器
     class Http < Output
+      # 提交引用，用于跟踪HTTP请求
       attr_reader :commitref
 
+      # 初始化HTTP输出模块
       def initialize
         super
         @cfg = Oxidized.config.output.http
       end
 
+      # 设置HTTP输出配置
+      # 如果配置为空，则设置默认配置并提示用户编辑配置文件
       def setup
         return unless @cfg.empty?
 
@@ -22,6 +28,10 @@ module Oxidized
       require "uri"
       require "json"
 
+      # 存储节点配置到HTTP服务器
+      # @param node [Object] 节点对象
+      # @param outputs [Oxidized::Models::Outputs] 输出对象
+      # @param opt [Hash] 选项哈希，包含消息、用户、邮箱等信息
       def store(node, outputs, opt = {})
         @commitref = nil
         uri = URI.parse @cfg.url
@@ -47,6 +57,11 @@ module Oxidized
 
       private
 
+      # 生成JSON格式的配置数据
+      # @param node [Object] 节点对象
+      # @param outputs [Oxidized::Models::Outputs] 输出对象
+      # @param opt [Hash] 选项哈希
+      # @return [String] JSON格式的字符串
       def generate_json(node, outputs, opt)
         JSON.pretty_generate(
           'msg'    => opt[:msg],
@@ -55,8 +70,8 @@ module Oxidized
           'group'  => opt[:group],
           'node'   => node,
           'config' => outputs.to_cfg
-          # actually we need to also iterate outputs, for other types like in gitlab.
-          # But most people don't use 'type' functionality.
+          # 实际上我们还需要遍历输出，用于其他类型如gitlab。
+          # 但大多数人不使用'type'功能。
         )
       end
     end

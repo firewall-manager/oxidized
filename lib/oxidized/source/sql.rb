@@ -1,5 +1,7 @@
 module Oxidized
   module Source
+    # SQL源模块
+    # 从SQL数据库中读取设备信息，支持多种数据库适配器和SSL连接
     class SQL < Source
       begin
         require 'sequel'
@@ -7,6 +9,8 @@ module Oxidized
         raise OxidizedError, 'sequel not found: sudo gem install sequel'
       end
 
+      # 设置SQL源配置
+      # 如果配置为空，则设置默认配置并提示用户编辑配置文件
       def setup
         if @cfg.empty?
           Oxidized.asetus.user.source.sql.adapter   = 'sqlite'
@@ -18,12 +22,15 @@ module Oxidized
           raise NoConfig, "No source sql config, edit #{Oxidized::Config.configfile}"
         end
 
-        # map.name is mandatory
+        # map.name是必需的
         return if @cfg.map.has_key?('name')
 
         raise InvalidConfig, "map/name is a mandatory source attribute, edit #{Oxidized::Config.configfile}"
       end
 
+      # 从SQL数据库加载节点信息
+      # @param node_want [String, nil] 要加载的特定节点名称
+      # @return [Array] 节点信息数组
       def load(node_want = nil)
         nodes = []
         db = connect
@@ -33,13 +40,13 @@ module Oxidized
         query = query.where(@cfg.map.name.to_sym => node_want) if node_want
 
         query.each do |node|
-          # map node parameters
+          # 映射节点参数
           keys = {}
           @cfg.map.each { |key, sql_column| keys[key.to_sym] = node_var_interpolate node[sql_column.to_sym] }
           keys[:model] = map_model keys[:model] if keys.has_key? :model
           keys[:group] = map_group keys[:group] if keys.has_key? :group
 
-          # map node specific vars
+          # 映射节点特定变量
           vars = {}
           @cfg.vars_map.each do |key, sql_column|
             vars[key.to_s] = node_var_interpolate node[sql_column.to_sym]
@@ -54,11 +61,14 @@ module Oxidized
 
       private
 
+      # 初始化SQL源模块
       def initialize
         super
         @cfg = Oxidized.config.source.sql
       end
 
+      # 连接到SQL数据库
+      # @return [Sequel::Database] 数据库连接对象
       def connect
         options = {
           adapter:  @cfg.adapter,

@@ -1,26 +1,34 @@
+# AsyncOS 设备模型
+# 支持 Cisco AsyncOS (Email Security Appliance) 的配置备份
 class AsyncOS < Oxidized::Model
   using Refinements
 
   # ESA prompt "(mail.example.com)> " or "mail.example.com> "
+  # 提示符正则表达式：匹配 AsyncOS 设备提示符
   prompt /^\r*\(?[\w.\- ]+\)?[#>]\s+$/
+  # 注释字符：AsyncOS 使用感叹号作为注释
   comment '! '
 
+  # 选择密码短语显示选项
   # Select passphrase display option
   expect /\[\S+\]>\s/ do |data, re|
     send "3\n"
     data.sub re, ''
   end
 
+  # 处理分页显示
   # handle paging
   expect /-Press Any Key For More-+.*$/ do |data, re|
     send " "
     data.sub re, ''
   end
 
+  # 处理版本信息
   cmd 'version' do |cfg|
     comment cfg
   end
 
+  # 处理配置显示，清理动态信息和格式化
   cmd 'showconfig' do |cfg|
     # Delete hour and date which change each run
     # cfg.gsub! /\sCurrent Time: \S+\s\S+\s+\S+\s\S+\s\S+/, ' Current Time:'
@@ -42,6 +50,7 @@ class AsyncOS < Oxidized::Model
     cfg
   end
 
+  # SSH 连接配置
   cfg :ssh do
     pre_logout "exit"
   end

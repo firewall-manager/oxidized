@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
 module Oxidized
+  # Oxidized版本号
   VERSION = '0.34.3'
+  # 完整版本号（包含Git信息）
   VERSION_FULL = '0.34.3'
+  
+  # 设置版本号
+  # 从Git仓库获取版本信息并更新常量
+  # @return [Boolean] 是否成功设置版本号
   def self.version_set
     version_full = %x(git describe --tags).chop rescue ""
     version      = %x(git describe --tags --abbrev=0).chop rescue ""

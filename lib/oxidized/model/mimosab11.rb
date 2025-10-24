@@ -6,8 +6,12 @@ rescue LoadError
   raise Oxidized::OxidizedError, "mechanize not found: sudo gem install mechanize"
 end
 
+# Mimosa B11 设备模型
+# 支持 Mimosa B11 网络设备的配置备份
+# 使用 HTTP POST 登录和 GET 获取配置
 class Mimosab11 < Oxidized::Model
   using Refinements
+  # 配置回调函数：通过 HTTP POST 登录然后 GET 获取配置
   # Callback cfg_cb function to login(POST) then get(GET) the configuration
   cfg_cb = lambda do
     @e = Mechanize.new
@@ -23,10 +27,12 @@ class Mimosab11 < Oxidized::Model
     cfg.body
   end
 
+  # 处理配置数据
   cmd cfg_cb do |cfg|
     cfg
   end
 
+  # HTTP 连接配置
   cfg :http do
     @username = @node.auth[:username]
     @password = @node.auth[:password]

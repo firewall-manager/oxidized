@@ -1,34 +1,46 @@
+# AOS-CX 设备模型
+# 支持 Aruba AOS-CX 交换机的配置备份
 class Aoscx < Oxidized::Model
   using Refinements
 
+  # 前一个命令重复后跟 "\eE"，有时会出现在最后一行
+  # SSH 交换机提示符可能以 \r 开头，后跟提示符本身，正则表达式 ([\w\s.-]+[#>] )，结束该行
+  # Telnet 交换机可能以各种 vt100 控制字符开头，正则表达式 (\e\[24;[0-9][hH])，后跟提示符，再后跟
+  # 至少 3 个其他 vt100 字符
   # previous command is repeated followed by "\eE", which sometimes ends up on last line
   # ssh switches prompt may start with \r, followed by the prompt itself, regex ([\w\s.-]+[#>] ), which ends the line
   # telnet switchs may start with various vt100 control characters, regex (\e\[24;[0-9][hH]), follwed by the prompt, followed
   # by at least 3 other vt100 characters
   prompt /(^\r|\e\[24;[0-9][hH])?([\w\s.-]+[#>] )($|(\e\[24;[0-9][0-9]?[hH]){3})/
 
+  # 注释字符：AOS-CX 使用感叹号作为注释
   comment '! '
 
+  # 将下一行控制序列替换为换行符
   # replace next line control sequence with a new line
   expect /(\e\[1M\e\[\??\d+(;\d+)*[A-Za-z]\e\[1L)|(\eE)/ do |data, re|
     data.gsub re, "\n"
   end
 
+  # 替换所有使用的 vt100 控制序列
   # replace all used vt100 control sequences
   expect /\e\[\??\d+(;\d+)*[A-Za-z]/ do |data, re|
     data.gsub re, ''
   end
 
+  # 处理"按任意键继续"提示
   expect /Press any key to continue(\e\[\??\d+(;\d+)*[A-Za-z])*$/ do
     send ' '
     ""
   end
 
+  # 处理"输入交换机编号"提示
   expect /Enter switch number/ do
     send "\n"
     ""
   end
 
+  # 处理所有命令的输出，清理控制字符和动态信息
   cmd :all do |cfg|
     cfg = cfg.cut_both
     cfg = cfg.gsub /^\r/, ''
@@ -39,6 +51,7 @@ class Aoscx < Oxidized::Model
     cfg
   end
 
+  # 处理敏感信息，隐藏各种密码和密钥
   cmd :secret do |cfg|
     cfg.gsub! /^(snmp-server community) \S+(.*)/, '\\1 <secret hidden> \\2'
     cfg.gsub! /^(snmp-server host \S+) \S+(.*)/, '\\1 <secret hidden> \\2'
@@ -49,10 +62,12 @@ class Aoscx < Oxidized::Model
     cfg
   end
 
+  # 处理版本信息
   cmd 'show version' do |cfg|
     comment cfg
   end
 
+  # 处理环境信息，隐藏温度、转速和功耗等动态信息
   cmd 'show environment' do |cfg|
     cfg.gsub! /^(LC.*\s+)\d+\s+$/, '\\1<hidden>'
     cfg.gsub! /^(\d\/\d\/\d.*\s+)\d+\s+$/, '\\1<hidden>'
@@ -78,26 +93,33 @@ class Aoscx < Oxidized::Model
     comment cfg
   end
 
+  # 处理模块信息
   cmd 'show module' do |cfg|
     comment cfg
   end
 
+  # 处理接口收发器信息
   cmd 'show interface transceiver' do |cfg|
     comment cfg
   end
 
+  # 处理系统信息，排除动态信息
   cmd 'show system | exclude "Up Time" | exclude "CPU" | exclude "Memory" | exclude "Pkts .x" | exclude "Lowest" | exclude "Missed"' do |cfg|
     comment cfg
   end
 
+  # 处理运行配置
   cmd 'show running-config'
 
+  # Telnet 连接配置
   cfg :telnet do
     username /Username:/
     password /Password:/
   end
 
+  # Telnet 和 SSH 连接配置
   cfg :telnet, :ssh do
+    # 处理额外密码的首选方式
     # preferred way to handle additional passwords
     if vars :enable
       post_login do
@@ -109,6 +131,7 @@ class Aoscx < Oxidized::Model
     pre_logout "exit"
   end
 
+  # SSH 连接配置
   cfg :ssh do
     pty_options(chars_wide: 1000)
   end

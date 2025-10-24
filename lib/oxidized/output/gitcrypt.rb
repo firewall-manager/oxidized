@@ -1,7 +1,10 @@
 module Oxidized
   module Output
+    # Git加密输出模块
+    # 将设备配置保存到加密的Git仓库中，使用git-crypt进行加密
     class GitCrypt < Output
       using Refinements
+      # Git加密操作异常类
       class GitCryptError < OxidizedError; end
       begin
         require 'git'
@@ -9,8 +12,10 @@ module Oxidized
         raise OxidizedError, 'git not found: sudo gem install git'
       end
 
+      # 提交引用，用于跟踪Git提交
       attr_reader :commitref
 
+      # 初始化Git加密输出模块
       def initialize
         super
         @cfg = Oxidized.config.output.gitcrypt
@@ -21,6 +26,8 @@ module Oxidized
         @gitcrypt_adduser = @gitcrypt_cmd + " add-gpg-user --trusted "
       end
 
+      # 设置Git加密输出配置
+      # 如果配置为空，则设置默认配置并提示用户编辑配置文件
       def setup
         if @cfg.empty?
           Oxidized.asetus.user.output.gitcrypt.user  = 'Oxidized'
@@ -39,6 +46,8 @@ module Oxidized
         end
       end
 
+      # 初始化Git加密
+      # @param repo [Git::Base] Git仓库对象
       def crypt_init(repo)
         repo.chdir do
           system(@gitcrypt_init)
@@ -51,18 +60,26 @@ module Oxidized
         end
       end
 
+      # 锁定Git加密仓库
+      # @param repo [Git::Base] Git仓库对象
       def lock(repo)
         repo.chdir do
           system(@gitcrypt_lock)
         end
       end
 
+      # 解锁Git加密仓库
+      # @param repo [Git::Base] Git仓库对象
       def unlock(repo)
         repo.chdir do
           system(@gitcrypt_unlock)
         end
       end
 
+      # 存储节点配置到加密的Git仓库
+      # @param file [String] 文件名
+      # @param outputs [Oxidized::Models::Outputs] 输出对象
+      # @param opt [Hash] 选项哈希，包含消息、用户、邮箱等信息
       def store(file, outputs, opt = {})
         @msg   = opt[:msg]
         @user  = opt[:user]  || @cfg.user
@@ -71,6 +88,7 @@ module Oxidized
         @commitref = nil
         repo = @cfg.repo
 
+        # 处理每种输出类型
         outputs.types.each do |type|
           type_cfg = ''
           type_repo = ::File.join(::File.dirname(repo), type + '.git')
@@ -89,12 +107,16 @@ module Oxidized
         update repo, file, outputs.to_cfg
       end
 
+      # 获取节点配置
+      # @param node [Object] 节点对象
+      # @param group [String] 组名
+      # @return [String, nil] 配置内容或nil
       def fetch(node, group)
         repo, path = yield_repo_and_path(node, group)
         repo = Git.open repo
         unlock repo
         index = repo.index
-        # Empty repo ?
+        # 空仓库？
         raise 'Empty git repo' if ::File.exist?(index.path)
 
         ::File.read path
@@ -103,7 +125,10 @@ module Oxidized
         'node not found'
       end
 
-      # give a hash of all oid revision for the given node, and the date of the commit
+      # 获取给定节点的所有oid修订版本哈希和提交日期
+      # @param node [Object] 节点对象
+      # @param group [String] 组名
+      # @return [Array] 版本信息数组
       def version(node, group)
         repo, path = yield_repo_and_path(node, group)
 
@@ -114,9 +139,9 @@ module Oxidized
         tab = []
         walker.each do |commit|
           hash = {}
-          # We keep :date for reverse compatibility on oxidized-web <= 0.15.1
+          # 我们保留:date以兼容oxidized-web <= 0.15.1
           hash[:date] = commit.date.to_s
-          # date as a Time instance for more flexibility in oxidized-web
+          # 日期作为Time实例，在oxidized-web中更灵活
           hash[:time] = commit.date
           hash[:oid] = commit.objectish
           hash[:author] = commit.author
@@ -129,7 +154,11 @@ module Oxidized
         'node not found'
       end
 
-      # give the blob of a specific revision
+      # 获取特定修订版本的blob内容
+      # @param node [Object] 节点对象
+      # @param group [String] 组名
+      # @param oid [String] 对象ID
+      # @return [String] 版本内容
       def get_version(node, group, oid)
         repo, path = yield_repo_and_path(node, group)
         repo = Git.open repo
@@ -141,7 +170,12 @@ module Oxidized
         lock repo
       end
 
-      # give a hash with the patch of a diff between 2 revision and the stats (added and deleted lines)
+      # 获取两个修订版本之间差异的补丁哈希和统计信息（添加和删除的行数）
+      # @param node [Object] 节点对象
+      # @param group [String] 组名
+      # @param oid1 [String] 第一个对象ID
+      # @param oid2 [String] 第二个对象ID
+      # @return [Hash] 差异信息
       def get_diff(node, group, oid1, oid2)
         diff_commits = nil
         repo, _path = yield_repo_and_path(node, group)
@@ -175,6 +209,10 @@ module Oxidized
 
       private
 
+      # 获取仓库和路径
+      # @param node [Object] 节点对象
+      # @param group [String] 组名
+      # @return [Array] [仓库路径, 文件路径]
       def yield_repo_and_path(node, group)
         repo = node.repo
         path = node.name
@@ -184,6 +222,10 @@ module Oxidized
         [repo, path]
       end
 
+      # 更新仓库中的文件
+      # @param repo [String] 仓库路径
+      # @param file [String] 文件名
+      # @param data [String] 数据内容
       def update(repo, file, data)
         return if data.empty?
 
@@ -214,6 +256,13 @@ module Oxidized
         end
       end
 
+      # 更新仓库中的文件内容
+      # @param repo [String] 仓库路径
+      # @param file [String] 文件名
+      # @param data [String] 数据内容
+      # @param msg [String] 提交消息
+      # @param user [String] 用户名
+      # @param email [String] 邮箱
       def update_repo(repo, file, data, msg, user, email)
         grepo = Git.open repo
         grepo.config('user.name', user)

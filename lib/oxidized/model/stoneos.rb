@@ -1,11 +1,14 @@
+# Hillstone Networks StoneOS 设备模型
+# 支持 Hillstone Networks StoneOS 软件的配置备份
 class StoneOS < Oxidized::Model
   using Refinements
 
-  # Hillstone Networks StoneOS software
-
+  # 提示符正则表达式：匹配 StoneOS 设备提示符
   prompt /^\r?[\w.()-]+~?[#>](\s)?$/
+  # 注释字符：StoneOS 使用井号作为注释
   comment '# '
 
+  # 处理分页器
   expect /^\s.*--More--.*$/ do |data, re|
     send ' '
     data.sub re, ''

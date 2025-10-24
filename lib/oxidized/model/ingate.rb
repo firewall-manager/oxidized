@@ -1,6 +1,9 @@
+# Ingate 设备模型
+# 支持 Ingate 防火墙的配置备份
 class Ingate < Oxidized::Model
   using Refinements
 
+  # 配置回调函数：通过 HTTP POST 获取配置
   cfg_cb = lambda do
     cfg = @m.post(
       @main_url,
@@ -21,14 +24,18 @@ class Ingate < Oxidized::Model
     cfg.body
   end
 
+  # 处理配置数据
   cmd cfg_cb do |cfg|
+    # 移除时间戳信息
     cfg.gsub! /^# Timestamp:.*$/, ''
     cfg
   end
 
+  # HTTP 连接配置
   cfg :http do
     @secure = true
     @main_page = "/"
+    # 定义登录方法
     define_singleton_method :login do
       @main_url = URI::HTTP.build host: @node.ip, path: @main_page
       @m.post(

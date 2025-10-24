@@ -1,18 +1,25 @@
+# Allied Telesis AlliedWare Plus 设备模型
+# 支持 Allied Telesis AlliedWare Plus 网络设备的配置备份
+# https://www.alliedtelesis.com/products/software/AlliedWare-Plus
 class AWPlus < Oxidized::Model
   using Refinements
 
   # Allied Telesis Alliedware Plus Model#
   # https://www.alliedtelesis.com/products/software/AlliedWare-Plus
 
+  # 提示符正则表达式：匹配 AlliedWare Plus 设备提示符
   prompt /^(\r?[\w.@:\/-]+[#>]\s?)$/
+  # 注释字符：AlliedWare Plus 使用感叹号作为注释
   comment '! '
 
+  # 避免需要 "term length 0" 来显示完整配置文件
   # Avoids needing "term length 0" to display full config file.
   expect /--More--/ do |data, re|
     send ' '
     data.sub re, ''
   end
 
+  # 移除分页器的垃圾输出，如 VT100 转义码
   # Removes gibberish pager output e.g. VT100 escape codes
   cmd :all do |cfg|
     cfg.gsub! "\e[K", '' # example how to handle pager - cleareol EL0
@@ -21,9 +28,10 @@ class AWPlus < Oxidized::Model
     cfg.cut_both
   end
 
+  # 从配置文件中移除密码
+  # 在全局 oxidized 配置文件中添加 vars "remove_secret: true" 来启用
   # Remove passwords from config file.
   # Add vars "remove_secret: true" to global oxidized config file to enable.
-
   cmd :secret do |cfg|
     cfg.gsub! /^(snmp-server community).*/, '\\1 <configuration removed>'
     cfg.gsub! /^(username \S+ privilege \d+) (\S+).*/, '\\1 <secret hidden>'
@@ -35,8 +43,8 @@ class AWPlus < Oxidized::Model
     cfg
   end
 
+  # 将 "Show system" 输出添加到配置开头
   # Adds "Show system" output to start of config.
-
   cmd 'Show System' do |cfg|
     comment cfg.insert(0, "--------------------------------------------------------------------------------! \n")
     # Unhash below to write a comment in the config file.
@@ -56,17 +64,20 @@ class AWPlus < Oxidized::Model
             }.join
   end
 
+  # 实际获取设备的运行配置
   # Actually get the devices running config#
   cmd 'show running-config' do |cfg|
     cfg
   end
 
+  # Telnet 连接配置，用于检测用户名和密码提示符
   # Config required for telnet to detect username & password prompt.
   cfg :telnet do
     username /login:\s/
     password /^Password:\s/
   end
 
+  # SSH 连接配置，指定换行符
   # Config required for ssh to specify newline characters.
   cfg :telnet, :ssh do
     newline "\r\n"

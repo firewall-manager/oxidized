@@ -1,35 +1,34 @@
+# Ubiquiti UniFi AP 设备模型
+# 支持 Ubiquiti UniFi AP 6.x 版本的配置备份
+# 也应该适用于 UniFi 交换机和 airOS，也许可以合并它们
+# 由于它依赖于 exec 通道，因为交互式会话不会捕获所有 system.cfg 输出，
+# 所以不能在此模型中使用 telnet
 class Unifiap < Oxidized::Model
   using Refinements
 
-  # Ubiquiti Unifi AP circa 6.x
-  # Should also work for unfi switches, and airOS, maybe they could be combined.
-  # Since it relies on exec channels, because the interactive session wouldn't
-  # capture all of the system.cfg output, you can't use telnet with this model.
+  # 有时有一个方便的信息命令可以总结一些设备属性，
+  # 但在 exec 模式下似乎不可用。所以我们尝试通过从各种地方提取信息来构建类似的列表。
+  # AirOS 没有其中一些文件，所以可能必须回退到其他命令或位置。
 
-  # Sometimes there's a handy info command that summarizes some device attributes,
-  # but it doesn't seem to be available in exec mode. So we try to build up a similar
-  # list by extracting tidbits from various places. AirOS doesn't have some of these
-  # files, so we  # may have to fall back on other commands, or locations.
-
-  # First get the board model
+  # 首先获取板卡型号
   cmd 'head -4 /etc/board.info' do |cfg|
     @model = Regexp.last_match(1) if cfg =~ /board\.name=(\S+)/i
     ""
   end
 
-  # and version
+  # 获取版本信息
   cmd 'cat /etc/version' do |cfg|
     @version = Regexp.last_match(1) if cfg =~ /(\S+)$/i
     ""
   end
 
-  # Now the Mac address
+  # 获取 MAC 地址
   cmd 'ifconfig eth0' do |cfg|
     @mac = Regexp.last_match(1) if cfg =~ /eth0\s+Link encap:Ethernet\s+HWaddr\s+(\w+:\w+:\w+:\w+:\w+:\w+)/i
     ""
   end
 
-  # Next see if we can get our IP and host name out of /etc/hosts
+  # 尝试从 /etc/hosts 获取 IP 和主机名
   cmd 'cat /etc/hosts' do |cfg|
     cfg = cfg.split("\n").reject do |line|
       line[/^\s*(127|0000:0000:0000:0000:0000:0000:0000:0001|0:0:0:0:0:0:0:1|::1)/]
@@ -42,7 +41,7 @@ class Unifiap < Oxidized::Model
     ""
   end
 
-  # We check here to see if we succeeded with /etc/hosts. If not, then we try again with ifconfig, and /tmp/system.cfg
+  # 检查是否成功从 /etc/hosts 获取信息。如果没有，则尝试使用 ifconfig 和 /tmp/system.cfg
   cmd 'echo' do
     unless @ip
       cmd 'ifconfig br0' do |cfg|
@@ -64,18 +63,18 @@ class Unifiap < Oxidized::Model
     ""
   end
 
-  # Check if ntpclient is running
+  # 检查 ntpclient 是否正在运行
   cmd 'ps wwww' do |cfg|
     @ntpserver = Regexp.last_match(1) if cfg =~ /bin\/ntpclient.+-h\s*(\S+)/i
     ""
   end
 
-  # If it's a Unifi device it may have NTP health indication
-  # If there are other places that Ubiquiti puts these status files, add them here.
+  # 如果是 UniFi 设备，可能有 NTP 健康指示
+  # 如果 Ubiquiti 在其他地方放置这些状态文件，请在此处添加它们
   cmd '[ -e /tmp/run/ntp.ready ] || [ -e /var/run/ntp.ready ] && echo "File(s) exist(s)" || echo "No such file"' do |cfg|
     if cfg =~ /No such file/i
       if @ntpserver
-        # Ok, now lets try getting the skew from the output of ntpclient
+        # 好的，现在尝试从 ntpclient 的输出中获取偏差
         cmd "ntpclient -d -n -c 2 -i0 -h #{@ntpserver}" do |ntp_out|
           @skew = ntpskew(ntp_out)
         end
@@ -88,7 +87,7 @@ class Unifiap < Oxidized::Model
     ""
   end
 
-  # Now we can display it all as a banner
+  # 现在可以将所有信息显示为横幅
   cmd 'echo' do
     out = []
     out << "*************************"
@@ -102,38 +101,41 @@ class Unifiap < Oxidized::Model
     comment out.join("\n") + "\n"
   end
 
-  # Followed by the board info
+  # 接下来是板卡信息
   cmd 'cat /etc/board.info' do |cfg|
     cfg = "#\n# Board Info:\n#\n" + cfg
     comment cfg
   end
 
-  # Lastly the system config
+  # 最后是系统配置
   cmd 'cat /tmp/system.cfg' do |cfg|
     cfg = "#\n# System Config:\n#\n" + cfg
     cfg + "\n"
   end
 
+  # 处理敏感信息，隐藏密码
   cmd :secret do |cfg|
     cfg.gsub! /^((?:users|snmp\.(?:user|community))\.\d+\.password)=.+/, "# \\1=<hidden>"
     cfg
   end
 
+  # SSH 连接配置
   cfg :ssh do
-    exec true # Don't run shell, run each command in exec channel
+    # 不运行 shell，在 exec 通道中运行每个命令
+    exec true
   end
 
-  # NTPskew: Return the skew in micro seconds from the ntpclient output
+  # NTP 偏差：从 ntpclient 输出返回以微秒为单位的偏差
   def ntpskew(cfg)
     index = skew = nil
 
     cfg.each_line do |line|
-      # Look for the header just before the stats line, and find which number is skew
+      # 查找统计行之前的标题，并找到哪个数字是偏差
       if line.match(/^\s*[a-z]+\s+[a-z]+\s+[a-z]+\s+[a-z]+/i)
         words = line.split
         index = words.map(&:downcase).index("skew")
       end
-      # Now look for the single stats line and grab the skew
+      # 现在查找单个统计行并获取偏差
       if !index.nil? && line.match(/^\s*[\d.]+\s+[\d.]+\s+[\d.]+\s+[\d.]+/)
         numbers = line.split
         skew = numbers[index]

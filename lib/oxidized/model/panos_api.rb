@@ -1,24 +1,29 @@
-# PanOS API-based model for Oxidized
-#
-# The API-based model produced an XML configuration file that can actually be
-# restored as a configuration backup. Make sure to use the "http" input for
-# this module.
-
-begin
-  # Nokogiri is required because the PanOS API, as well as the
-  # configuration file format uses XML. It is required to parse API
-  # responses, as well as to pretty-print the configuration XML file
-  # when saving it.
-  require 'nokogiri'
-rescue LoadError
-  # Oxidized itself depends on mechanize, which in turn depends on
-  # nokogiri, so this should never happen.
-  raise Oxidized::OxidizedError, 'nokogiri not found: sudo gem install nokogiri'
-end
-
+# Palo Alto PanOS API 设备模型
+# 支持基于 API 的 Palo Alto Networks 防火墙配置备份
+# 基于 API 的模型生成可实际恢复的 XML 配置文件
+# 确保为此模块使用 "http" 输入
 class PanOS_API < Oxidized::Model # rubocop:disable Naming/ClassAndModuleCamelCase
   using Refinements
 
+  # PanOS API-based model for Oxidized
+  #
+  # The API-based model produced an XML configuration file that can actually be
+  # restored as a configuration backup. Make sure to use the "http" input for
+  # this module.
+
+  begin
+    # Nokogiri is required because the PanOS API, as well as the
+    # configuration file format uses XML. It is required to parse API
+    # responses, as well as to pretty-print the configuration XML file
+    # when saving it.
+    require 'nokogiri'
+  rescue LoadError
+    # Oxidized itself depends on mechanize, which in turn depends on
+    # nokogiri, so this should never happen.
+    raise Oxidized::OxidizedError, 'nokogiri not found: sudo gem install nokogiri'
+  end
+
+  # 配置获取回调函数
   # Callback function for getting the configuration file.
   cfg_cb = lambda do
     url_param = URI.encode_www_form(
@@ -63,9 +68,11 @@ class PanOS_API < Oxidized::Model # rubocop:disable Naming/ClassAndModuleCamelCa
     Nokogiri::XML(cfg).to_xml(indent: 2)
   end
 
+  # 基于上述回调定义命令
   # Define the command based on the callback above.
   cmd cfg_cb
 
+  # HTTP 连接配置
   cfg :http do
     # Palo Alto's API always requires HTTPS as far as I know.
     @secure = true

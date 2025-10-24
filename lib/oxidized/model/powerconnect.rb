@@ -1,47 +1,58 @@
+# Dell PowerConnect 设备模型
+# 支持 Dell PowerConnect 系列交换机的配置备份
 class PowerConnect < Oxidized::Model
   using Refinements
 
+  # 提示符正则表达式：匹配 PowerConnect 设备提示符（允许主机名中有空格）
   prompt /^([\w\s.@-]+(\(\S*\))?[#>]\s?)$/ # allow spaces in hostname..dell does not limit it.. #
-
+  # 注释字符：PowerConnect 使用感叹号作为注释
   comment '! '
 
+  # 处理分页器
   expect /\n\s*--More--\s+.*/ do |data, re| # Also grab the blank line above the --More--
     send ' '
     data.sub re, ''
   end
 
+  # 过滤所有命令输出
   # Filter all command output
   cmd :all do |cfg|
     cfg.gsub! /\r+/, ''                     # Remove the CR characters echoed back from the commands
     cfg.cut_tail                            # Drop the last line which is the next prompt
   end
 
+  # 处理敏感信息，隐藏密码和密钥
   cmd :secret do |cfg|
     cfg.gsub! /^((?:enable |username \S+ )?password (?:level\s\d{1,2} |encrypted ){,2})\S+(.*)/, '\1<hidden>\2'
     cfg.gsub! /^(tacacs-server key) \S+/, '\\1 <secret hidden>'
     cfg
   end
 
+  # 处理版本信息，检测堆叠设备
   cmd 'show version' do |cfg|
     @stackable = true if @stackable.nil? && (cfg =~ /(U|u)nit\s/)
     cfg = cfg.split("\n").reject { |line| line[/Up\sTime/] }
     comment cfg.join("\n") + "\n"
   end
 
+  # 处理系统信息，检测设备型号
   cmd 'show system' do |cfg|
     @model = Regexp.last_match(1) if cfg =~ /Power[C|c]onnect (\d{4})[P|F]?/
     clean cfg
   end
 
+  # 处理运行配置，移除动态超时信息
   cmd 'show running-config' do |cfg|
     cfg.sub(/^(sflow \S+ destination owner \S+ timeout )\d+$/, '! \1<timeout>') # Remove changing timeout
   end
 
+  # Telnet 和 SSH 连接配置
   cfg :telnet, :ssh do
     username /^User( Name)?:/
     password /^\r?Password:/
   end
 
+  # Telnet 和 SSH 连接配置
   cfg :telnet, :ssh do
     post_login do
       if vars(:enable) == true
@@ -63,6 +74,7 @@ class PowerConnect < Oxidized::Model
     end
   end
 
+  # 清理系统信息，移除动态信息
   def clean(cfg)
     out = []
     len1 = len2 = skip_blocks = 0

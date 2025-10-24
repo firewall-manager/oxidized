@@ -2,15 +2,24 @@ require 'slack_ruby_client'
 require 'uri'
 require 'net/http'
 
-# defaults to posting a diff, if messageformat is supplied them a message will be posted too
-# diff defaults to true
+# Slack差异钩子模块
+# 默认发布差异信息，如果提供了消息格式，则也会发布消息
+# diff默认为true
 
 class SlackDiff < Oxidized::Hook
+  # 验证配置参数
+  # 检查必需的配置项是否存在
   def validate_cfg!
     raise KeyError, 'hook.token is required' unless cfg.has_key?('token')
     raise KeyError, 'hook.channel is required' unless cfg.has_key?('channel')
   end
 
+  # 上传文件到Slack
+  # @param client [Slack::Web::Client] Slack客户端
+  # @param title [String] 文件标题
+  # @param content [String] 文件内容
+  # @param channel [String] 频道ID
+  # @param proxy [String, nil] 代理设置
   def slack_upload(client, title, content, channel, proxy)
     logger.info "Posting diff as snippet to #{channel}"
     upload_dest = client.files_getUploadURLExternal(filename:     "change",
@@ -48,6 +57,9 @@ class SlackDiff < Oxidized::Hook
     end
   end
 
+  # 运行钩子
+  # 将配置差异发送到Slack频道
+  # @param ctx [Object] 钩子上下文，包含事件和节点信息
   def run_hook(ctx)
     return unless ctx.node
     return unless ctx.event.to_s == "post_store"
@@ -60,6 +72,8 @@ class SlackDiff < Oxidized::Hook
     client = Slack::Web::Client.new
     client.auth_test
     logger.info "Connected"
+    
+    # 发布差异信息（如果启用）
     if cfg.has_key?("diff") ? cfg.diff : true
       gitoutput = ctx.node.output.new
       diff = gitoutput.get_diff ctx.node, ctx.node.group, ctx.commitref, nil
@@ -69,7 +83,8 @@ class SlackDiff < Oxidized::Hook
         slack_upload(client, title, content, cfg.channel, cfg.has_key?('proxy') ? cfg.proxy : nil)
       end
     end
-    # message custom formatted - optional
+    
+    # 发布自定义消息（可选）
     if cfg.message?
       logger.info cfg.message
       msg = cfg.message % { node: ctx.node.name.to_s, group: ctx.node.group.to_s, commitref: ctx.commitref,

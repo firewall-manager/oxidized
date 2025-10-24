@@ -1,24 +1,32 @@
+# Ericsson IPOS 设备模型
+# 支持 Ericsson SSR (IPOS) 和 Redback SE (SEOS) 的配置备份
 class IPOS < Oxidized::Model
   using Refinements
 
   # Ericsson SSR (IPOS)
   # Redback SE (SEOS)
 
+  # 提示符正则表达式：匹配 IPOS 设备提示符
   prompt /^([\[\]\w.@-]+[#:>]\s?)$/
+  # 注释字符：IPOS 使用感叹号作为注释
   comment '! '
 
+  # 处理机箱信息
   cmd 'show chassis' do |cfg|
     comment cfg.cut_tail
   end
 
+  # 处理硬件信息
   cmd 'show hardware' do |cfg|
     comment cfg.cut_tail
   end
 
+  # 处理版本信息
   cmd 'show release' do |cfg|
     comment cfg.cut_tail
   end
 
+  # 处理配置信息，清理动态信息
   cmd 'show configuration' do |cfg|
     # SEOS regularly adds some odd line breaks in random places
     # when showing the config, triggering changes.
@@ -46,11 +54,13 @@ class IPOS < Oxidized::Model
     cfg.join
   end
 
+  # Telnet 连接配置
   cfg :telnet do
     username /^login:/
     password /^\r*password:/
   end
 
+  # Telnet 和 SSH 连接配置
   cfg :telnet, :ssh do
     post_login 'terminal length 0'
     if vars :enable

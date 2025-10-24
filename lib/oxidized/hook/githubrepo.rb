@@ -1,10 +1,17 @@
 require 'rugged'
 
+# GitHub仓库钩子模块
+# 将本地Git仓库推送到远程GitHub仓库，支持多种认证方式
 class GithubRepo < Oxidized::Hook
+  # 验证配置参数
+  # 检查必需的配置项是否存在
   def validate_cfg!
     raise KeyError, 'hook.remote_repo is required' unless cfg.has_key?('remote_repo')
   end
 
+  # 运行钩子
+  # 将本地Git仓库推送到远程GitHub仓库
+  # @param ctx [Object] 钩子上下文，包含事件和节点信息
   def run_hook(ctx)
     unless ctx.node
       logger.error 'GithubRepo.run_hook: no node provided'
@@ -26,6 +33,7 @@ class GithubRepo < Oxidized::Hook
 
     logger.info "Pushing local repository(#{repo.path}) to remote: #{url}"
 
+    # 设置远程仓库
     if repo.remotes['origin'].nil?
       repo.remotes.create('origin', url)
     elsif repo.remotes['origin'].url != url
@@ -44,11 +52,14 @@ class GithubRepo < Oxidized::Hook
                       '"gem install rugged -- --with-ssh"'
         end
       end
-      # re-raise exception for the calling method
+      # 重新抛出异常给调用方法
       raise
     end
   end
 
+  # 获取并合并远程分支
+  # @param repo [Rugged::Repository] Git仓库对象
+  # @param creds [Object] 认证凭据
   def fetch_and_merge_remote(repo, creds)
     result = repo.fetch('origin', [repo.head.name], credentials: creds)
     logger.debug result.inspect
@@ -85,6 +96,10 @@ class GithubRepo < Oxidized::Hook
 
   private
 
+  # 创建认证凭据
+  # 支持用户名密码、SSH密钥和SSH代理认证
+  # @param node [Object] 节点对象
+  # @return [Proc] 认证过程对象
   def credentials(node)
     Proc.new do |_url, username_from_url, _allowed_types| # rubocop:disable Style/Proc
       git_user = cfg.has_key?('username') ? cfg.username : (username_from_url || 'git')
@@ -108,6 +123,9 @@ class GithubRepo < Oxidized::Hook
     end
   end
 
+  # 创建SSH密钥认证凭据
+  # @param args [Hash] 参数哈希，包含用户名、私钥和公钥路径
+  # @return [Rugged::Credentials::SshKey] SSH密钥认证对象
   def rugged_sshkey(args = {})
     git_user   = args[:git_user]
     privkey    = args[:privkey]
@@ -118,6 +136,9 @@ class GithubRepo < Oxidized::Hook
                                     passphrase: ENV.fetch("OXIDIZED_SSH_PASSPHRASE", nil))
   end
 
+  # 获取远程仓库URL
+  # @param node [Object] 节点对象
+  # @return [String, nil] 远程仓库URL
   def remote_repo(node)
     if node.group.nil? || cfg.remote_repo.is_a?(String)
       cfg.remote_repo
@@ -128,7 +149,9 @@ class GithubRepo < Oxidized::Hook
     end
   end
 
-  # Returns a Rugged::Branch to the remote branch or nil if it doen't exist
+  # 返回远程分支的Rugged::Branch对象，如果不存在则返回nil
+  # @param repo [Rugged::Repository] Git仓库对象
+  # @return [Rugged::Branch, nil] 远程分支对象
   def remote_branch(repo)
     head_branch = repo.branches[repo.head.name]
     repo.branches['origin/' + head_branch.name]

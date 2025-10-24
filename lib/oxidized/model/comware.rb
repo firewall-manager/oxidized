@@ -1,49 +1,61 @@
+# Comware 设备模型
+# 支持 HP (A-series)/H3C/3Com Comware 网络设备的配置备份
 class Comware < Oxidized::Model
-  # HP (A-series)/H3C/3Com Comware
   using Refinements
 
-  # sometimes the prompt might have a leading nul or trailing ASCII Bell (^G)
+  # 提示符正则表达式：匹配 Comware 设备提示符
+  # 有时提示符可能有前导空字符或尾随 ASCII 响铃符 (^G)
   prompt /^\0*(<[\w.-]+>).?$/
+  # 注释字符：Comware 使用井号作为注释
   comment '# '
 
-  # example how to handle pager
+  # 处理分页器的示例
   # expect /^\s*---- More ----$/ do |data, re|
   #  send ' '
   #  data.sub re, ''
   # end
 
+  # 处理所有命令的输出
   cmd :all do |cfg|
-    # cfg.gsub! /^.*\e\[42D/, ''        # example how to handle pager
-    # skip rogue ^M
+    # cfg.gsub! /^.*\e\[42D/, ''        # 处理分页器的示例
+    # 跳过流氓 ^M 字符
     cfg = cfg.delete "\r"
     cfg.cut_both
   end
 
+  # 处理敏感信息，隐藏密码和密钥
   cmd :secret do |cfg|
+    # 隐藏 SNMP 代理社区字符串
     cfg.gsub! /^( snmp-agent community).*/, '\\1 <configuration removed>'
+    # 隐藏密码哈希
     cfg.gsub! /^( password hash).*/, '\\1 <configuration removed>'
+    # 隐藏密码密文
     cfg.gsub! /^( password cipher).*/, '\\1 <configuration removed>'
     cfg
   end
 
+  # Telnet 连接配置
   cfg :telnet do
     username /^(Username|[Ll]ogin):/
     password /^Password:/
   end
 
+  # Telnet 和 SSH 连接配置
   cfg :telnet, :ssh do
-    # handle enable passwords
+    # 处理启用密码
     post_login do
       if vars(:enable) == true
+        # 启用超级用户模式（无需密码）
         cmd "super"
       elsif vars(:enable)
+        # 启用超级用户模式（需要密码）
         cmd "super", /^\s?[pP]assword:/
         cmd vars(:enable)
       end
     end
-    # enable command-line mode on SMB comware switches (HP V1910, V1920)
-    # autodetection is hard, because the 'summary' command is paged, and
-    # the pager cannot be disabled before _cmdline-mode on.
+    # 在 SMB Comware 交换机上启用命令行模式（HP V1910, V1920）
+    # 自动检测很困难，因为 'summary' 命令是分页的，
+    # 分页器在 _cmdline-mode on 之前无法禁用
     if vars :comware_cmdline
       post_login do
         # HP V1910, V1920
@@ -64,25 +76,34 @@ class Comware < Oxidized::Model
       end
     end
 
+    # 禁用屏幕长度
     post_login 'screen-length disable'
+    # 撤销终端监控
     post_login 'undo terminal monitor'
+    # 退出命令
     pre_logout 'quit'
   end
 
+  # 处理版本信息
   cmd 'display version' do |cfg|
+    # 过滤掉运行时间信息
     cfg = cfg.each_line.reject { |l| l.match /uptime/i }.join
     comment cfg
   end
 
+  # 处理设备信息
   cmd 'display device' do |cfg|
     comment cfg
   end
 
+  # 处理设备制造信息
   cmd 'display device manuinfo' do |cfg|
+    # 过滤掉十六进制字符
     cfg = cfg.each_line.reject { |l| l.match 'FF'.hex.chr }.join
     comment cfg
   end
 
+  # 处理当前配置
   cmd 'display current-configuration' do |cfg|
     cfg
   end
