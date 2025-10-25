@@ -58,9 +58,8 @@ class FSOS < Oxidized::Model
     # 设置终端长度
     post_login 'terminal length 0'
     # 设置终端宽度
-    post_login 'terminal width 512'
+    post_login 'terminal width 0'
     # 退出命令
-    pre_logout 'exit'
     pre_logout 'exit'
   end
 end
